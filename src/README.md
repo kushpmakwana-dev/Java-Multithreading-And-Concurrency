@@ -289,3 +289,1003 @@ Both threads access the same heap object. This is efficient but introduces race-
 1. Process = execution environment.
 2. Thread = execution path.
 3. Shared memory = efficient communication with concurrency risks.
+
+
+Got it. This is the **bridge from “what is a thread?” to “why do we actually use threads?”** and then into implementation.
+
+I’ll add this as the next section of the same README rather than treating it as a new unrelated topic.
+
+# 03. Why Do We Use Threads?
+
+The course is going to focus primarily on **threads and concurrency**, not inter-process communication.
+
+The reason is practical: backend applications commonly need multiple independent tasks to make progress concurrently, and threads provide the execution mechanism for doing that within a process.
+
+---
+
+## 1. Concurrent Execution
+
+The first major benefit of threads is allowing multiple tasks to make progress concurrently.
+
+Think about a web browser.
+
+While you are using a webpage:
+
+- One execution path can handle your scrolling and clicking.
+- Another can load data from the network.
+- Another can perform background work.
+
+If everything had to happen sequentially, a long-running operation could block the user interface.
+
+For example:
+
+```text
+User clicks
+    ↓
+Download data
+    ↓
+Process data
+    ↓
+Update UI
+```
+
+If the download takes 5 seconds, the application could feel frozen if the same execution path has to wait for it.
+
+With concurrent execution, another thread can continue handling user interaction while the download is happening.
+
+### Mental Model
+
+Think of a restaurant.
+
+If one waiter has to:
+
+1. Take an order.
+2. Go to the kitchen.
+3. Wait for the food.
+4. Bring the food.
+5. Take the next customer's order.
+
+The restaurant becomes slow.
+
+Instead, different workers can handle different responsibilities concurrently.
+
+**The goal is not “make everything parallel.”**
+
+The goal is:
+
+> **Don't unnecessarily block one task while another independent task is making progress.**
+
+---
+
+# 2. Resource Sharing
+
+Threads belonging to the same process share process resources, particularly memory.
+
+This is one of the biggest advantages of threads.
+
+Imagine a text editor such as Notepad or Word.
+
+Different tasks might need to happen around the same time:
+
+```text
+                Text Editor
+                     │
+        ┌────────────┼────────────┐
+        ↓            ↓            ↓
+   User Input    Spell Check   Auto Save
+```
+
+One thread can process user interaction.
+
+Another can perform background checking.
+
+Another can save the document.
+
+Because these threads belong to the same process, they can work with the same application state.
+
+This makes communication between them efficient.
+
+### But remember the trade-off
+
+Shared memory is both:
+
+**A strength**
+
+> Threads can efficiently share data.
+
+**A danger**
+
+> Multiple threads modifying the same data can create concurrency problems.
+
+For example:
+
+```java
+balance = balance - 100;
+```
+
+If two threads perform this operation simultaneously, things can go wrong.
+
+This is where we will eventually reach:
+
+- Race conditions
+- `synchronized`
+- Locks
+- Atomic variables
+- Visibility
+- Thread safety
+
+So don't think:
+
+> "Threads share memory, therefore everything is easy."
+
+Think:
+
+> **Threads share memory, therefore communication is easier—but coordination becomes our responsibility.**
+
+---
+
+# 3. Threads Are Lightweight
+
+Compared with processes, threads generally require fewer resources because they share many resources belonging to their process.
+
+Think back to our cookie analogy.
+
+Creating another process is like opening another completely independent kitchen.
+
+You need another environment.
+
+Creating another thread is more like asking another family member to help in the **same kitchen**.
+
+The kitchen already exists.
+
+The ingredients already exist.
+
+The environment already exists.
+
+The new worker simply joins the existing work.
+
+Therefore:
+
+```text
+Process
+   ↓
+Separate execution environment
+   ↓
+More resources
+
+Thread
+   ↓
+Shares existing process resources
+   ↓
+Generally fewer resources
+```
+
+### Important
+
+"Lightweight" does **not** mean:
+
+> Threads are free.
+
+Threads still consume memory and CPU resources, and scheduling/context switching has overhead.
+
+This becomes important later when we discuss why production systems generally don't keep creating and destroying threads unnecessarily.
+
+That leads naturally toward **thread pools and `ExecutorService`**.
+
+---
+
+# 4. Real-World Examples
+
+The same idea appears everywhere.
+
+### Browser
+
+```text
+User interaction
+        +
+Network operations
+        +
+Background processing
+```
+
+### Text Editor
+
+```text
+User input
+     +
+Spell checking
+     +
+Auto-save
+```
+
+### Game
+
+```text
+Player movement
+      +
+Background music
+      +
+Network communication
+      +
+Game processing
+```
+
+### Backend Server
+
+A backend application may simultaneously need to handle:
+
+```text
+HTTP Request A
+HTTP Request B
+HTTP Request C
+Database work
+External API calls
+Background tasks
+```
+
+Threads allow these independent tasks to make progress concurrently.
+
+---
+
+# 5. The Big Picture
+
+So far, our mental model should be:
+
+```text
+                    PROCESS
+                       │
+          ┌────────────┼────────────┐
+          ↓            ↓            ↓
+       Thread 1     Thread 2     Thread 3
+          │            │            │
+          └────────────┼────────────┘
+                       ↓
+               Shared Process Memory
+```
+
+The **process provides the environment**.
+
+The **threads provide the execution paths**.
+
+The **shared memory allows efficient communication**.
+
+And the **scheduler decides when runnable threads get CPU time**.
+
+---
+
+# 6. Why This Matters for Our Course
+
+The rest of the course will essentially explore this question:
+
+> **How do we safely and efficiently make multiple threads work together?**
+
+Because creating a thread is the easy part.
+
+The difficult questions are:
+
+- What happens when two threads access the same variable?
+- What happens when two threads modify the same object?
+- How do we prevent race conditions?
+- How does one thread communicate with another?
+- How do we make changes visible between threads?
+- How do we coordinate threads?
+- How do we avoid unnecessary blocking?
+- How do we manage many threads efficiently?
+
+Those questions lead us into the actual world of **Java concurrency**.
+
+---
+
+## Final Mental Model
+
+Keep this in your head:
+
+> **Threads exist because applications often have multiple independent pieces of work that shouldn't unnecessarily block one another.**
+
+And there are three major reasons we use them:
+
+**1. Concurrent execution**  
+Multiple tasks can make progress without unnecessarily waiting for one another.
+
+**2. Resource sharing**  
+Threads within the same process can efficiently access shared resources.
+
+**3. Lightweight execution**  
+Threads generally require fewer resources than separate processes because they share the process environment.
+
+Absolutely. Since you specifically want these notes for your GitHub README, I'll make this section **revision-friendly but intuition-first**, and I'll preserve the instructor's important emphasis rather than dumping every sentence into the notes.
+
+# 04. Creating Threads in Java — Extending `Thread`
+
+Java provides multiple ways to create threads.
+
+The first approach is:
+
+> **Create a class that extends `Thread` and override its `run()` method.**
+
+---
+
+## 1. The Basic Idea
+
+The simplest mental model is:
+
+```text
+extends Thread
+       ↓
+override run()
+       ↓
+create object
+       ↓
+call start()
+       ↓
+new thread begins execution
+       ↓
+run() executes on that thread
+```
+
+The important parts to remember are:
+
+```java
+class MyThread extends Thread {
+
+    @Override
+    public void run() {
+        // Code executed by this thread
+    }
+}
+```
+
+That's the core of this approach.
+
+The code inside `run()` represents the work that the new thread is supposed to perform.
+
+---
+
+# 2. Why `extends Thread`?
+
+`Thread` is a Java class that represents a thread of execution.
+
+When our class extends `Thread`, our class becomes a specialized type of `Thread`.
+
+```java
+class MyThread extends Thread {
+    
+    @Override
+    public void run() {
+        System.out.println("Thread is running");
+    }
+}
+```
+
+Now:
+
+```java
+MyThread t1 = new MyThread();
+```
+
+creates an object of `MyThread`.
+
+Because:
+
+```java
+MyThread extends Thread
+```
+
+the object is also a `Thread`.
+
+### OOP connection
+
+This is simply inheritance:
+
+```text
+Thread
+   ↑
+   |
+MyThread
+```
+
+So the `MyThread` class inherits the functionality provided by `Thread` and provides its own implementation of `run()`.
+
+---
+
+# 3. The `run()` Method
+
+The `run()` method contains the work that the thread should execute.
+
+```java
+class MyThread extends Thread {
+
+    @Override
+    public void run() {
+
+        System.out.println("Thread is running");
+
+        // Other work
+    }
+}
+```
+
+You can put whatever appropriate task you want inside `run()`.
+
+For example:
+
+```java
+@Override
+public void run() {
+
+    for (int i = 0; i < 5; i++) {
+        System.out.println("Running: " + i);
+    }
+}
+```
+
+### Mental Model
+
+Think of a thread as a worker.
+
+```text
+Thread = Worker
+
+run() = Work assigned to that worker
+```
+
+Creating the thread gives you the worker.
+
+`run()` describes the work that worker performs.
+
+---
+
+# 4. The `main` Thread Already Exists
+
+This is **very important**.
+
+When a Java application starts, execution doesn't begin with some magical absence of threads.
+
+The JVM starts with a thread that executes the `main()` method.
+
+For example:
+
+```java
+public static void main(String[] args) {
+
+    System.out.println("Hello");
+
+}
+```
+
+That statement is executed by the **main thread**.
+
+So conceptually:
+
+```text
+JVM
+ |
+ └── Main Thread
+       |
+       └── main()
+```
+
+You don't have to manually create the main thread.
+
+It already exists.
+
+---
+
+# 5. Creating Multiple Threads
+
+We can create multiple `Thread` objects.
+
+```java
+class MyThread extends Thread {
+
+    @Override
+    public void run() {
+        System.out.println("Thread is running");
+    }
+}
+```
+
+Then:
+
+```java
+public static void main(String[] args) {
+
+    MyThread t1 = new MyThread();
+    MyThread t2 = new MyThread();
+
+    t1.start();
+    t2.start();
+}
+```
+
+Now conceptually we have:
+
+```text
+                 JVM Process
+                      |
+          ┌───────────┼───────────┐
+          ↓           ↓           ↓
+      Main Thread   Thread 1   Thread 2
+          |           |           |
+        main()      run()       run()
+```
+
+---
+
+# 6. `start()` — The Important Part
+
+This is one of the most important concepts in this section.
+
+We don't normally do:
+
+```java
+t1.run();
+```
+
+to start a new thread.
+
+We do:
+
+```java
+t1.start();
+```
+
+### What does `start()` mean?
+
+Think of:
+
+```java
+t1.start();
+```
+
+as saying:
+
+> "JVM, I want this `Thread` to execute independently."
+
+The JVM/runtime arranges for a new thread of execution to become runnable, and that thread eventually executes `run()`.
+
+Conceptually:
+
+```text
+t1.start()
+    ↓
+New thread becomes runnable
+    ↓
+Thread gets CPU time
+    ↓
+run()
+    ↓
+Thread's work executes
+```
+
+### Very important
+
+`start()` and `run()` are **not equivalent**.
+
+Calling:
+
+```java
+t1.run();
+```
+
+is simply an ordinary method invocation on the current thread.
+
+It does **not** create a new thread.
+
+Calling:
+
+```java
+t1.start();
+```
+
+initiates execution of the thread.
+
+---
+
+# 7. Multiple Threads Execute Concurrently
+
+Suppose:
+
+```java
+class MyThread extends Thread {
+
+    private int id;
+
+    MyThread(int id) {
+        this.id = id;
+    }
+
+    @Override
+    public void run() {
+
+        for (int i = 0; i < 5; i++) {
+            System.out.println(
+                "Thread " + id + " is running: " + i
+            );
+        }
+    }
+}
+```
+
+And:
+
+```java
+public static void main(String[] args) {
+
+    MyThread t1 = new MyThread(1);
+    MyThread t2 = new MyThread(2);
+
+    t1.start();
+    t2.start();
+}
+```
+
+We now have:
+
+```text
+Main Thread
+     |
+     ├── creates t1
+     |
+     ├── creates t2
+     |
+     ├── starts t1
+     |
+     └── starts t2
+
+             ↓
+
+       Thread 1      Thread 2
+          |             |
+         run()         run()
+```
+
+The two threads can make progress concurrently.
+
+---
+
+# 8. Never Assume the Output Order
+
+This is another **very important** concept.
+
+You might expect:
+
+```text
+Thread 1 → 0
+Thread 1 → 1
+Thread 1 → 2
+
+Thread 2 → 0
+Thread 2 → 1
+Thread 2 → 2
+```
+
+But you cannot rely on that.
+
+You might get:
+
+```text
+Thread 1 → 0
+Thread 2 → 0
+Thread 1 → 1
+Thread 2 → 1
+Thread 2 → 2
+Thread 1 → 2
+```
+
+Or:
+
+```text
+Thread 1 → 0
+Thread 1 → 1
+Thread 2 → 0
+Thread 2 → 1
+Thread 1 → 2
+Thread 2 → 2
+```
+
+Or another valid ordering.
+
+### Why?
+
+Because the scheduler decides which runnable thread gets CPU time.
+
+The timing depends on things such as:
+
+- CPU availability.
+- Thread scheduling.
+- Other system activity.
+- Blocking/sleeping.
+- Runtime conditions.
+
+Therefore:
+
+> **When multiple threads execute concurrently, don't assume a particular execution order unless you explicitly establish that ordering.**
+
+This is going to become extremely important when we study synchronization.
+
+---
+
+# 9. `sleep()` — Putting the Current Thread to Sleep
+
+A thread can temporarily pause its execution using `Thread.sleep()`.
+
+For example:
+
+```java
+Thread.sleep(1000);
+```
+
+means approximately:
+
+> Suspend the currently executing thread for 1000 milliseconds.
+
+That is:
+
+```text
+1000 ms = 1 second
+```
+
+### Mental Model
+
+The instructor's analogy here is excellent:
+
+> **Think of the thread as a person.**
+
+The person is working.
+
+Then:
+
+```java
+Thread.sleep(1000);
+```
+
+is like the person saying:
+
+> "I'm going to sleep for a second."
+
+They stop executing their work temporarily.
+
+Then, after the sleep period, they become eligible to continue.
+
+---
+
+# 10. Example With `sleep()`
+
+```java
+class MyThread extends Thread {
+
+    private int id;
+
+    MyThread(int id) {
+        this.id = id;
+    }
+
+    @Override
+    public void run() {
+
+        for (int i = 0; i < 5; i++) {
+
+            System.out.println(
+                "Thread " + id + " is running: " + i
+            );
+
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+}
+```
+
+Now imagine two threads:
+
+```text
+Thread 1
+   ↓
+Print
+   ↓
+Sleep
+   ↓
+Thread 2 gets opportunity
+   ↓
+Print
+   ↓
+Sleep
+   ↓
+Thread 1 wakes and continues
+   ↓
+Print
+   ↓
+Sleep
+   ↓
+...
+```
+
+This is why the output can appear interleaved.
+
+---
+
+# 11. `sleep()` Does NOT Mean "Give My Turn to Another Thread"
+
+This is an important refinement.
+
+When a thread sleeps, it stops being runnable for the requested sleep duration.
+
+The scheduler may then run another runnable thread.
+
+But `sleep()` does **not** guarantee:
+
+> "Now Thread 2 must execute."
+
+It only says:
+
+> "The current thread should pause for approximately this duration."
+
+After the sleep ends, the thread becomes eligible to run again; it does not necessarily execute immediately.
+
+---
+
+# 12. The Big Problem With `extends Thread`
+
+At first glance, extending `Thread` looks perfectly fine:
+
+```java
+class MyThread extends Thread {
+
+    @Override
+    public void run() {
+        // work
+    }
+}
+```
+
+But Java has **single inheritance** for classes.
+
+A class can extend only one class.
+
+So this is impossible:
+
+```java
+class MyClass extends SomeClass, Thread {
+}
+```
+
+Java doesn't allow multiple class inheritance.
+
+Therefore, if our class already needs to extend another class:
+
+```java
+class MyClass extends SomeBusinessClass {
+}
+```
+
+we cannot also do:
+
+```java
+class MyClass extends Thread {
+}
+```
+
+That's the major limitation of this approach.
+
+---
+
+# 13. Why This Leads to `Runnable`
+
+This limitation naturally leads us to the next approach.
+
+Instead of saying:
+
+> "My class **is a Thread**."
+
+we can say:
+
+> "My class has **a task that a Thread can execute**."
+
+That's where the `Runnable` interface comes in.
+
+Conceptually:
+
+```text
+extends Thread approach
+
+MyTask IS-A Thread
+```
+
+versus:
+
+```text
+Runnable approach
+
+MyTask = task/work
+Thread = execution mechanism
+```
+
+This separation is much more flexible.
+
+We'll see why in the next section.
+
+---
+
+# 14. Interview Questions
+
+### Q1. How can you create a thread by extending `Thread`?
+
+Extend the `Thread` class and override its `run()` method.
+
+```java
+class MyThread extends Thread {
+
+    @Override
+    public void run() {
+        // task
+    }
+}
+```
+
+---
+
+### Q2. What is the difference between `start()` and `run()`?
+
+`start()` initiates execution of a new thread, which will eventually invoke `run()`.
+
+Calling `run()` directly is just a normal method call and executes on the calling thread.
+
+---
+
+### Q3. Why can't we extend another class if we extend `Thread`?
+
+Because Java supports single inheritance for classes.
+
+A class can extend only one class.
+
+---
+
+### Q4. Is thread output deterministic?
+
+Generally, no.
+
+When multiple threads execute concurrently, their exact scheduling order is not guaranteed unless synchronization or another ordering mechanism establishes it.
+
+---
+
+### Q5. Does `sleep()` create a new thread?
+
+No.
+
+It pauses the **currently executing thread** for the specified duration.
+
+---
+
+# 15. Final Mental Model
+
+Remember this sequence:
+
+```text
+class MyThread extends Thread
+             ↓
+       override run()
+             ↓
+       create object
+             ↓
+          start()
+             ↓
+   new thread becomes runnable
+             ↓
+        run() executes
+```
+
+And remember the fundamental distinction:
+
+> **`run()` defines the work. `start()` begins execution of that work on the new thread.**
+
+Finally, remember why this approach isn't ideal in every situation:
+
+> **Extending `Thread` consumes your one class-inheritance slot.**
+
+And that is exactly why Java gives us another approach:
+
+> **`Runnable` — separate the task from the thread that executes it.**
