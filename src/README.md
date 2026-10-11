@@ -1289,3 +1289,1072 @@ Finally, remember why this approach isn't ideal in every situation:
 And that is exactly why Java gives us another approach:
 
 > **`Runnable` — separate the task from the thread that executes it.**
+
+
+Perfect. This completes the **`Runnable` section**, including the transition toward `Callable`. Here are the consolidated GitHub-ready notes.
+
+# 05. Creating Threads in Java — `Runnable`
+
+The second way of creating a thread is by implementing the `Runnable` interface.
+
+This approach solves the biggest limitation of extending `Thread`:
+
+> **Java does not support multiple class inheritance.**
+
+---
+
+# 1. The Problem With `extends Thread`
+
+Earlier, we did this:
+
+```java
+class MyThread extends Thread {
+
+    @Override
+    public void run() {
+        // business logic
+    }
+}
+```
+
+This works.
+
+But remember:
+
+```java
+class MyThread extends Thread
+```
+
+means `MyThread` has already used its one class inheritance slot.
+
+Java does **not** allow:
+
+```java
+class MyThread extends Thread, SomeOtherClass {
+}
+```
+
+So if our class needs to extend another class for business/domain reasons, extending `Thread` is no longer an option.
+
+This is where `Runnable` helps.
+
+---
+
+# 2. `Runnable` Separates the Task From the Thread
+
+Instead of saying:
+
+> "My class **is a Thread**."
+
+we say:
+
+> "My class represents **work that a Thread can execute**."
+
+That is a much better mental model.
+
+```text
+extends Thread
+
+MyTask IS-A Thread
+```
+
+versus:
+
+```text
+implements Runnable
+
+MyTask = Task/Work
+Thread = Worker that executes the task
+```
+
+This separation is the key idea behind `Runnable`.
+
+---
+
+# 3. Implementing `Runnable`
+
+The basic structure is:
+
+```java
+class MyTask implements Runnable {
+
+    @Override
+    public void run() {
+        // business logic
+    }
+}
+```
+
+Notice the important difference:
+
+```java
+extends Thread
+```
+
+became:
+
+```java
+implements Runnable
+```
+
+And `run()` is still there.
+
+```java
+@Override
+public void run() {
+    // business logic
+}
+```
+
+The business logic doesn't fundamentally change.
+
+---
+
+# 4. Creating the `Runnable`
+
+Now we create an instance of our task:
+
+```java
+Runnable task = new MyTask();
+```
+
+At this point:
+
+**We have NOT created a new thread.**
+
+We have created an object representing the work that needs to be performed.
+
+This distinction is extremely important.
+
+```text
+Runnable object
+       ↓
+represents the TASK
+```
+
+It is not itself the execution mechanism.
+
+---
+
+# 5. Give the Task to a Thread
+
+Now we create a `Thread` and give it our `Runnable`:
+
+```java
+Runnable task = new MyTask();
+
+Thread thread = new Thread(task);
+```
+
+Think of this as:
+
+```text
+Task
+ ↓
+"Here is the work you need to perform."
+
+Thread
+ ↓
+"I am the worker who will execute that work."
+```
+
+Then:
+
+```java
+thread.start();
+```
+
+Now the thread begins execution, and the `run()` method of the supplied `Runnable` is executed by that thread.
+
+---
+
+# 6. Complete Example
+
+```java
+class MyTask implements Runnable {
+
+    @Override
+    public void run() {
+        System.out.println("Task is running");
+    }
+}
+```
+
+Then:
+
+```java
+public class Main {
+
+    public static void main(String[] args) {
+
+        Runnable task = new MyTask();
+
+        Thread thread = new Thread(task);
+
+        thread.start();
+    }
+}
+```
+
+The flow is:
+
+```text
+MyTask object
+     ↓
+implements Runnable
+     ↓
+contains run()
+     ↓
+       +
+     ↓
+Thread object
+     ↓
+new Thread(task)
+     ↓
+start()
+     ↓
+new thread executes task.run()
+```
+
+---
+
+# 7. What Actually Changed From `extends Thread`?
+
+Very little about the actual execution model changed.
+
+### Earlier
+
+```java
+class MyThread extends Thread {
+
+    @Override
+    public void run() {
+        // work
+    }
+}
+```
+
+```java
+MyThread thread = new MyThread();
+
+thread.start();
+```
+
+### With `Runnable`
+
+```java
+class MyTask implements Runnable {
+
+    @Override
+    public void run() {
+        // work
+    }
+}
+```
+
+```java
+Runnable task = new MyTask();
+
+Thread thread = new Thread(task);
+
+thread.start();
+```
+
+The important difference is **who represents the task and who represents the execution mechanism.**
+
+---
+
+# 8. Mental Model: Worker vs Job
+
+This is probably the most useful mental model to remember.
+
+Imagine a company.
+
+You have:
+
+```text
+Runnable = Job description
+Thread   = Worker
+```
+
+The job says:
+
+> "Here is the work that needs to be done."
+
+The worker says:
+
+> "I will execute that work."
+
+So:
+
+```text
+Runnable
+   ↓
+"What should be done?"
+
+Thread
+   ↓
+"Who executes it?"
+```
+
+This separation becomes extremely important later when we move toward `ExecutorService` and thread pools.
+
+---
+
+# 9. Why `Runnable` Is Preferred
+
+Suppose we have an existing business class:
+
+```java
+class PaymentService extends SomeBaseService {
+    
+}
+```
+
+We cannot do:
+
+```java
+class PaymentService extends SomeBaseService, Thread {
+}
+```
+
+because Java doesn't support multiple class inheritance.
+
+But we can do:
+
+```java
+class PaymentService extends SomeBaseService
+                      implements Runnable {
+
+    @Override
+    public void run() {
+        // background task
+    }
+}
+```
+
+Now we can inherit from our required business class **and** implement `Runnable`.
+
+```text
+PaymentService
+      │
+      ├── extends SomeBaseService
+      │
+      └── implements Runnable
+```
+
+This is the major practical advantage.
+
+---
+
+# 10. `Runnable` Does Not Mean "Thread"
+
+This distinction is worth remembering.
+
+A `Runnable` is simply a contract representing a piece of work that can be executed.
+
+```java
+Runnable task = ...;
+```
+
+doesn't mean:
+
+> "A thread is running."
+
+A thread exists separately:
+
+```java
+Thread thread = new Thread(task);
+```
+
+And execution begins when:
+
+```java
+thread.start();
+```
+
+is called.
+
+---
+
+# 11. Why `run()` Still Exists
+
+You might wonder:
+
+> "If I'm implementing `Runnable`, why am I still writing `run()`?"
+
+Because `Runnable` defines the task contract.
+
+Conceptually, its important method is:
+
+```java
+void run();
+```
+
+Your implementation provides the actual work:
+
+```java
+@Override
+public void run() {
+    // actual task
+}
+```
+
+The `Thread` can then execute that task.
+
+---
+
+# 12. Thread vs Runnable
+
+| `Thread` | `Runnable` |
+|---|---|
+| Class | Interface |
+| Extend it | Implement it |
+| Your class becomes a `Thread` | Your class represents a task |
+| Uses class inheritance | Doesn't consume class inheritance slot |
+| Cannot extend another class | Can extend another class |
+| Couples task with execution mechanism | Separates task from execution |
+| Simple for demonstrations | More flexible design |
+
+### The most important difference
+
+```text
+Thread
+→ execution mechanism
+
+Runnable
+→ task to execute
+```
+
+---
+
+# 13. Is `Runnable` More Complicated?
+
+Slightly.
+
+With `Thread`:
+
+```java
+MyThread t = new MyThread();
+t.start();
+```
+
+With `Runnable`:
+
+```java
+Runnable task = new MyTask();
+Thread t = new Thread(task);
+t.start();
+```
+
+There is one additional object/step.
+
+But this is **not really a meaningful disadvantage**.
+
+The design benefit of separating the task from the thread is much more important.
+
+That's why `Runnable` is generally preferred over extending `Thread` when directly choosing between the two.
+
+---
+
+# 14. A Better Way to Think About the Design
+
+Don't think:
+
+> "`Runnable` is just another way to create a thread."
+
+Think:
+
+> **`Runnable` allows us to represent work independently from the mechanism that executes that work.**
+
+That distinction becomes much more powerful later.
+
+For example:
+
+```text
+Task
+ ↓
+Runnable
+ ↓
+ExecutorService
+ ↓
+Thread Pool
+ ↓
+Available Worker Thread
+```
+
+Now the application doesn't need to manually create a new thread for every task.
+
+This is much closer to how production backend systems are designed.
+
+---
+
+# 15. `Thread` vs `Runnable` vs `Callable`
+
+The instructor is now introducing the next concept: `Callable`.
+
+At first glance, `Runnable` and `Callable` look similar because both represent a task.
+
+The major conceptual difference is:
+
+```text
+Runnable
+    ↓
+run()
+    ↓
+returns nothing
+```
+
+while:
+
+```text
+Callable
+    ↓
+call()
+    ↓
+can return a result
+```
+
+For example, conceptually:
+
+```java
+Runnable
+    → perform the task
+    → no result
+
+Callable
+    → perform the task
+    → return a result
+```
+
+`Callable` also works with checked exceptions in a way `Runnable`'s `run()` contract does not.
+
+We'll treat `Callable` properly when we reach it rather than mixing it into the current thread-creation discussion.
+
+---
+
+# 16. Interview Questions
+
+### Q1. Why would you prefer `Runnable` over extending `Thread`?
+
+Because Java supports single inheritance. Implementing `Runnable` allows the class to extend another class while still representing a task that can be executed by a thread.
+
+---
+
+### Q2. Does implementing `Runnable` create a thread?
+
+**No.**
+
+It creates an object representing a task.
+
+A `Thread` must execute that task.
+
+```java
+Runnable task = new MyTask();
+
+Thread thread = new Thread(task);
+
+thread.start();
+```
+
+---
+
+### Q3. What is the relationship between `Thread` and `Runnable`?
+
+`Runnable` represents the work, while `Thread` provides the execution mechanism.
+
+---
+
+### Q4. Why is `Runnable` generally preferred over extending `Thread`?
+
+Because it separates the task from the thread and avoids consuming the class's single inheritance relationship.
+
+---
+
+# 17. Final Mental Model
+
+This is the part I would **really remember**:
+
+```text
+                 Runnable
+                    │
+                    │
+              "What work?"
+                    │
+                    ↓
+                  run()
+                    │
+                    │
+                    ↓
+                 Thread
+                    │
+                    │
+              "Who executes?"
+                    │
+                    ↓
+                  start()
+                    │
+                    ↓
+             New execution
+```
+
+Or in one sentence:
+
+> **`Runnable` defines the work; `Thread` provides a mechanism for executing that work.**
+
+And this is the reason `Runnable` is a better abstraction than directly extending `Thread` for most basic thread-task design.
+
+**Next concept: `Callable`** — which looks similar to `Runnable`, but introduces a very important capability: **getting a result back from the task.**
+
+Bro, this is an important section because we're moving from simply creating threads to understanding how Java handles tasks that return results. Let's turn the entire lecture into GitHub-ready notes, keeping the mental models, code examples, and interview distinctions clear.
+
+# 6. Callable, Exceptions, ExecutorService & Future
+
+Java Multithreading & Concurrency · README.md
+
+## 1. Why do we need `Callable`?
+
+Remember our previous discussion about `Runnable`.
+
+```
+public interface Runnable {
+    void run();
+}
+```
+
+The `run()` method returns `void`.
+
+Think about ordinary methods in Java. Sometimes we want a method to perform an operation and give us a result.
+
+```
+int calculateSum() {
+    return 10 + 20;
+}
+```
+
+If every method had to return `void`, we would lose the ability to return results directly.
+
+The same limitation exists with `Runnable`: its task contract doesn't provide a return value.
+
+This is where `Callable` comes in.
+
+Mental model:
+
+- `Runnable` — perform some work.
+- `Callable` — perform some work and return a result.
+
+## 2. Understanding the `Callable` interface
+
+The essential structure of `Callable` is:
+
+```
+public interface Callable<V> {
+    V call() throws Exception;
+}
+```
+
+Here, `V` represents the return type.
+
+For example:
+
+```
+import java.util.concurrent.Callable;
+
+class SumTask implements Callable<Integer> {
+
+    @Override
+    public Integer call() {
+        return 10 + 20;
+    }
+}
+```
+
+Let's break this down.
+
+- `Callable<Integer>` means the task returns an `Integer`.
+- `call()` contains the actual business logic.
+- `return 10 + 20` returns the result.
+- `call()` can declare checked exceptions.
+
+Compare that with `Runnable`:
+
+```
+class PrintTask implements Runnable {
+
+    @Override
+    public void run() {
+        System.out.println("Task is running");
+    }
+}
+```
+
+The task can print something, update data, or perform an operation, but its `run()` method doesn't return a value to its caller.
+
+### Runnable vs. Callable
+
+| Feature                      | `Runnable`                                             | `Callable<V>`                                |
+| ---------------------------- | ------------------------------------------------------ | -------------------------------------------- |
+| Method                       | `run()`                                                | `call()`                                     |
+| Return value                 | None (`void`)                                          | Returns `V`                                  |
+| Checked exceptions           | Cannot declare arbitrary checked exceptions in `run()` | Can declare checked exceptions               |
+| Direct use with `Thread`     | Yes                                                    | No, not directly                             |
+| Works with `ExecutorService` | Yes                                                    | Yes                                          |
+| Result through `Future`      | Not through the `Runnable` return value                | Yes, when submitted using `submit(Callable)` |
+
+Interview takeaway: `Callable` is useful when a task needs to produce a result or propagate a checked exception through its task-execution mechanism.
+
+## 3. Checked vs. unchecked exceptions
+
+Before going further, we need to understand the exception distinction.
+
+### Checked exceptions
+
+Checked exceptions are checked by the compiler. A method must catch them or declare them using `throws`, unless a suitable enclosing construct already handles them.
+
+Examples:
+
+- `IOException`
+- `SQLException`
+- `InterruptedException`
+
+Imagine reading a file.
+
+```
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
+class FileTask {
+
+    void readFile() throws IOException {
+        String content = Files.readString(Path.of("data.txt"));
+        System.out.println(content);
+    }
+}
+```
+
+The method declares `throws IOException` because file operations can fail for reasons such as access problems or I/O errors.
+
+This does not mean the compiler checks whether the file actually exists at runtime. It checks whether the checked exception is handled or declared.
+
+### Unchecked exceptions
+
+Unchecked exceptions are exceptions that the compiler does not require you to catch or declare.
+
+Examples:
+
+- `NullPointerException`
+- `ArrayIndexOutOfBoundsException`
+- `ArithmeticException`
+
+```
+String name = null;
+System.out.println(name.length());
+```
+
+This can throw a `NullPointerException` at runtime.
+
+You may handle it, but Java doesn't force you to.
+
+### The important distinction
+
+| Checked                                        | Unchecked                                                              |
+| ---------------------------------------------- | ---------------------------------------------------------------------- |
+| Compiler requires handling or declaration      | Compiler does not require handling or declaration                      |
+| Examples: `IOException`, `SQLException`        | Examples: `NullPointerException`, `ArithmeticException`                |
+| Often represents recoverable external failures | Often indicates invalid state or programming errors, though not always |
+
+One correction worth remembering: unchecked exceptions aren't necessarily logical errors, and checked exceptions aren't necessarily actual failures. The distinction is primarily about Java's compile-time handling requirements.
+
+## 4. Why `Callable` works with `ExecutorService`
+
+Here is where the concepts connect.
+
+With the earlier `Runnable` approach, we could do this:
+
+```
+Runnable task = new PrintTask();
+Thread thread = new Thread(task);
+thread.start();
+```
+
+But `Callable` cannot be passed directly to the `Thread` constructor because `Thread` accepts a `Runnable`, not a `Callable`.
+
+Instead, we can use `ExecutorService`.
+
+Mental model:
+
+Imagine a company with a team of workers.
+
+- `Callable` represents a job that produces a result.
+- `ExecutorService` manages the execution of submitted jobs.
+- Worker threads perform those jobs.
+- `Future` is your reference to the eventual result.
+
+Callable task
+
+Defines work and returns a value
+
+ExecutorService
+
+Accepts and manages task execution
+
+Worker thread
+
+Executes call()
+
+\*\*Future
+
+This also introduces a useful design principle: you can submit work without manually creating and starting a new thread for each task.
+
+## 5. Understanding `Future`
+
+Suppose you ask a worker to calculate something.
+
+You don't necessarily want to stand beside the worker and wait for the calculation to finish before doing anything else.
+
+Instead, you want a reference that lets you check the result later.
+
+That is the intuition behind `Future`.
+
+A `Future<V>` represents the eventual result of an asynchronous computation.
+
+It lets you:
+
+- Check whether the task has completed.
+- Wait for the result.
+- Retrieve the result.
+- Cancel the task, subject to the task's state and cancellation behavior.
+
+### The most important method: `get()`
+
+```
+Integer result = future.get();
+```
+
+If the task has not completed, `get()` blocks the calling thread until the result becomes available, the task fails, or the wait is interrupted.
+
+For example, if `main` calls `future.get()`, it is the main thread that may block.
+
+The worker executing the task is not necessarily blocked by this call.
+
+This distinction is important.
+
+## 6. Complete example: `Callable` + `ExecutorService` + `Future`
+
+This example brings everything together.
+
+```
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+
+class SumTask implements Callable<Integer> {
+
+    @Override
+    public Integer call() throws Exception {
+        System.out.println("Calculating sum...");
+        Thread.sleep(1000);
+
+        return 10 + 20;
+    }
+}
+
+public class Main {
+
+    public static void main(String[] args) throws Exception {
+
+        ExecutorService executor =
+                Executors.newSingleThreadExecutor();
+
+        try {
+            Callable<Integer> task = new SumTask();
+
+            Future<Integer> future = executor.submit(task);
+
+            System.out.println("Task submitted");
+
+            Integer result = future.get();
+
+            System.out.println("Result: " + result);
+
+        } finally {
+            executor.shutdown();
+        }
+    }
+}
+```
+
+Possible output:
+
+```
+Task submitted
+Calculating sum...
+Result: 30
+```
+
+The precise timing of the messages can vary, but the result is `30` if the task completes successfully.
+
+### Execution flow
+
+1. `newSingleThreadExecutor()` creates an executor that uses one worker thread.
+2. `new SumTask()` creates the task; it does not start a thread.
+3. `executor.submit(task)` submits the task for execution and returns a `Future<Integer>`.
+4. The worker eventually executes `call()`.
+5. `call()` returns `30`.
+6. `future.get()` retrieves that result, waiting if necessary.
+7. `shutdown()` prevents new task submissions and allows submitted work to finish.
+
+The executor manages the worker thread for us.
+
+## 7. Does `Future.get()` make the whole task sequential?
+
+Not necessarily.
+
+This is an important subtlety in the instructor's explanation.
+
+Consider:
+
+```
+Future<Integer> future1 = executor.submit(task1);
+Future<Integer> future2 = executor.submit(task2);
+
+Integer result1 = future1.get();
+Integer result2 = future2.get();
+```
+
+Both tasks are submitted before either result is retrieved.
+
+If the executor has sufficient worker threads, `task1` and `task2` may execute concurrently.
+
+However, the main thread waits at `future1.get()` before reaching `future2.get()`.
+
+```
+Main thread:
+Submit task1
+    ↓
+Submit task2
+    ↓
+Wait for future1.get()
+    ↓
+Retrieve result1
+    ↓
+Wait for future2.get() if necessary
+    ↓
+Retrieve result2
+```
+
+Meanwhile, the worker threads can execute the tasks independently.
+
+Key lesson: Calling `get()` sequentially doesn't mean the tasks themselves must execute sequentially. It means result retrieval by the calling thread is sequential.
+
+If the executor has only one worker, however, its submitted tasks will generally execute one at a time.
+
+## 8. Why does `Callable` return a `Future` instead of the result immediately?
+
+Imagine a task that takes five seconds.
+
+If `submit()` had to wait for the task to finish before returning its result, the calling thread would have to wait at submission time.
+
+Instead, `submit()` can return a `Future` while the task is still executing.
+
+```
+Main thread                  Worker thread
+    |                             |
+    |---- submit(task) ---------->|
+    |                             | execute call()
+    |<--- Future returned         |
+    |                             |
+    | do other work               |
+    |                             | compute result
+    |                             |
+    |---- future.get()            |
+    |      wait if needed         |
+    |<--- result returned --------|
+```
+
+This gives the application flexibility: it can perform other work before retrieving the result.
+
+`Future` is not itself the result; it is a handle for interacting with the computation and its eventual outcome.
+
+## 9. What happens when `Callable` throws an exception?
+
+A `Callable` can declare checked exceptions:
+
+```
+Callable<Integer> task = () -> {
+    throw new Exception("Calculation failed");
+};
+```
+
+When submitted to an executor, a failure is recorded in the resulting `Future`.
+
+When you call `get()`, the failure is reported through `ExecutionException`.
+
+```
+try {
+    Integer result = future.get();
+} catch (ExecutionException e) {
+    System.out.println("Task failed: " + e.getCause());
+}
+```
+
+This is another reason `Future` matters: it provides a way to observe the task's result or failure from the calling thread.
+
+## 10. Interview revision
+
+Q1. What is the difference between `Runnable` and `Callable`?
+
+`Runnable.run()` returns no result and cannot declare checked exceptions in its signature. `Callable<V>.call()` returns a value of type `V` and can declare checked exceptions.
+
+Q2. Can you pass a `Callable` directly to `new Thread()`?
+
+No. `Thread` accepts a `Runnable`, not a `Callable`. Use an `ExecutorService` to submit a `Callable`.
+
+Q3. What is a `Future`?
+
+A handle representing the outcome of an asynchronous computation, allowing the caller to check completion, retrieve the result, or attempt cancellation.
+
+Q4. What does `Future.get()` do?
+
+It retrieves the result, blocking the calling thread if necessary. It can throw `InterruptedException` or `ExecutionException`.
+
+Q5. What is the difference between checked and unchecked exceptions?
+
+Checked exceptions must be caught or declared; unchecked exceptions do not have that compiler requirement.
+
+Q6. Why use `ExecutorService`?
+
+It manages task execution and worker threads, avoiding the need to manually create a new thread for every submitted task.
+
+## 11. Final mental model
+
+Remember these four responsibilities:
+
+| Component         | Responsibility                          |
+| ----------------- | --------------------------------------- |
+| `Runnable`        | Defines work without a return value     |
+| `Callable<V>`     | Defines work that returns a value       |
+| `ExecutorService` | Manages task execution                  |
+| `Future<V>`       | Provides access to the eventual outcome |
+
+The complete flow is:
+
+```
+Callable<V>
+    ↓
+ExecutorService.submit()
+    ↓
+Worker executes call()
+    ↓
+Future<V>
+    ↓
+future.get()
+    ↓
+Result or exception
+```
+
+One final distinction: `Future.get()` is a blocking retrieval mechanism. Later, when we study more advanced concurrency, we can compare it with alternatives such as `CompletableFuture`, which supports composing asynchronous operations without requiring every result to be retrieved through a blocking `get()` call.
+
+The takeaway: `Runnable` teaches us how to define a task, `Callable` adds result-producing tasks, and `ExecutorService` with `Future` introduces the foundation of managed asynchronous execution in Java.
