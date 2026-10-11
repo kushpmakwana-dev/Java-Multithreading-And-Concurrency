@@ -2358,3 +2358,385 @@ Result or exception
 One final distinction: `Future.get()` is a blocking retrieval mechanism. Later, when we study more advanced concurrency, we can compare it with alternatives such as `CompletableFuture`, which supports composing asynchronous operations without requiring every result to be retrieved through a blocking `get()` call.
 
 The takeaway: `Runnable` teaches us how to define a task, `Callable` adds result-producing tasks, and `ExecutorService` with `Future` introduces the foundation of managed asynchronous execution in Java.
+
+# 07. Java Concurrency — Best Practices, Thread Safety & Exception Handling
+
+## 1. Runnable vs. Callable — Final Revision
+
+Both `Runnable` and `Callable` are functional interfaces that represent tasks, but they differ in return values and exception handling.
+
+| Feature | Runnable | Callable\<V> |
+|---|---|---|
+| Method | `run()` | `call()` |
+| Return value | `void` | Returns type `V` |
+| Declares checked exceptions | No | Yes |
+| Directly accepted by `new Thread(...)` | Yes | No |
+| Can be submitted to `ExecutorService` | Yes | Yes |
+| Typical use | Perform an action | Perform work and produce a result |
+
+### Runnable example
+
+```java
+Runnable task = () -> {
+    System.out.println("Sending welcome email");
+};
+
+Thread thread = new Thread(task);
+thread.start();
+```
+
+`Runnable` is suitable when we don't need a result returned through the task's method.
+
+### Callable example
+
+```java
+Callable<Integer> task = () -> {
+    return 10 + 20;
+};
+
+ExecutorService executor = Executors.newSingleThreadExecutor();
+
+try {
+    Future<Integer> future = executor.submit(task);
+    System.out.println(future.get()); // 30
+} finally {
+    executor.shutdown();
+}
+```
+
+`Callable<Integer>` means the task produces an `Integer` result. The `Future<Integer>` represents the eventual outcome of that submitted task.
+
+**Important:** `Runnable` can still modify shared state, write to a database, or throw unchecked exceptions. It simply doesn't return a value through `run()`.
+
+Also, use `Callable` when you need a result or want to declare checked exceptions—not because it is inherently better than `Runnable`.
+
+## 2. Checked vs. Unchecked Exceptions
+
+### Checked exceptions
+
+The compiler requires checked exceptions to be caught or declared with `throws`.
+
+Examples:
+- `IOException`
+- `SQLException`
+- `InterruptedException`
+
+### Unchecked exceptions
+
+The compiler does not require them to be caught or declared.
+
+Examples:
+- `NullPointerException`
+- `ArithmeticException`
+- `IllegalArgumentException`
+
+Unchecked exceptions can be anticipated too. The distinction is based on Java's exception type hierarchy and compiler rules, not simply whether an exception might occur at runtime.
+
+### Why does Runnable have a limitation?
+
+The `Runnable` interface declares:
+
+```java
+public interface Runnable {
+    void run();
+}
+```
+
+Therefore, an implementation cannot add an arbitrary checked exception to the method signature.
+
+This does not compile:
+
+```java
+Runnable task = () -> {
+    throw new IOException("File error"); // Compilation error
+};
+```
+
+Instead, handle the checked exception inside `run()`:
+
+```java
+Runnable task = () -> {
+    try {
+        Files.readString(Path.of("data.txt"));
+    } catch (IOException e) {
+        System.err.println("Unable to read file: " + e.getMessage());
+    }
+};
+```
+
+Alternatively, use `Callable` when you want the exception to propagate through `call()`:
+
+```java
+Callable<String> task = () ->
+    Files.readString(Path.of("data.txt"));
+```
+
+`Callable.call()` declares `throws Exception`, allowing checked exceptions to propagate from the task.
+
+When submitted to an `ExecutorService`, a failure is recorded in the returned `Future`. Calling `get()` on that future typically exposes the failure through an `ExecutionException`, whose cause is the original exception.
+
+## 3. Synchronization and Performance
+
+Synchronization allows threads to coordinate access to shared mutable state.
+
+However, synchronization has costs:
+- Threads may block while waiting for a lock.
+- Contention can reduce throughput.
+- Poorly designed locking can lead to deadlocks.
+- Excessive synchronization can limit parallel execution.
+
+### Practical principle
+
+**Keep critical sections small, but do not sacrifice correctness just to reduce locking.**
+
+For example:
+
+```java
+class Counter {
+    private int count;
+
+    public synchronized void increment() {
+        count++;
+    }
+}
+```
+
+Here, synchronization protects the increment operation against concurrent updates to the same counter.
+
+If the application requires more sophisticated coordination, other options may be appropriate, including `ReentrantLock`, atomic variables, or concurrent collections.
+
+Do not remove synchronization simply because it looks expensive. First establish correctness, then measure and optimize.
+
+## 4. Handling Interruptions Correctly
+
+Java uses interruption as a cooperative mechanism for requesting that a thread stop what it is doing or respond to cancellation.
+
+For example, `Thread.sleep()` throws `InterruptedException` when the sleeping thread is interrupted.
+
+```java
+try {
+    Thread.sleep(1000);
+} catch (InterruptedException e) {
+    Thread.currentThread().interrupt();
+    return;
+}
+```
+
+In this example, the code restores the interrupt status and exits the task.
+
+Why restore the status? Catching `InterruptedException` clears the thread's interrupt status. If the current method cannot propagate the exception, restoring the status allows higher-level code to observe the interruption.
+
+When a method can propagate `InterruptedException`, declaring and rethrowing it is often appropriate.
+
+**Important:** Never automatically swallow interruptions with an empty catch block. Doing so can interfere with cancellation and graceful shutdown.
+
+## 5. Thread Starvation
+
+Thread starvation occurs when a thread repeatedly fails to obtain the CPU time, lock, or other resource it needs to make progress.
+
+Imagine a team where one person is repeatedly denied the opportunity to work. Even if everyone else is productive, that person's task remains unfinished.
+
+The same idea applies to threads.
+
+Potential causes include:
+- Unfair lock acquisition.
+- Excessive contention.
+- Poor thread-pool configuration.
+- Long-running tasks occupying all available workers.
+- Scheduling priorities that disadvantage some threads.
+
+### How can starvation be reduced?
+
+- Avoid holding locks longer than necessary.
+- Use thread pools appropriate to the workload.
+- Avoid blocking operations that occupy all workers needed for other tasks.
+- Consider fair locking where fairness is required, understanding its performance trade-offs.
+- Monitor queue lengths, task latency, and worker utilization.
+
+Thread priorities are not a reliable universal solution. The JVM and operating system ultimately influence scheduling, and increasing a thread's priority does not guarantee fairness.
+
+## 6. High-Level Concurrency Utilities
+
+Java provides utilities in `java.util.concurrent` so that developers do not need to implement every concurrency mechanism manually.
+
+Examples include:
+
+- `ExecutorService` — manages task execution and worker threads.
+- `Future` — represents an eventual task outcome.
+- `BlockingQueue` — supports thread-safe producer-consumer workflows.
+- `ConcurrentHashMap` — supports concurrent access to a map.
+- `AtomicInteger` — supports atomic integer operations.
+- `CountDownLatch` — lets threads wait for a set of operations to complete.
+- `ReentrantLock` — provides explicit locking and additional coordination features.
+
+The right utility depends on the problem. These utilities reduce the amount of low-level coordination you must implement yourself, but they do not automatically make every surrounding operation thread-safe.
+
+## 7. `start()` vs. `run()`
+
+This is one of the most important distinctions in Java threading.
+
+### Calling `start()`
+
+```java
+Thread t1 = new Thread(() -> {
+    System.out.println("Executing task");
+});
+
+t1.start();
+```
+
+Calling `start()` schedules the thread for execution. The JVM arranges for its `run()` method to execute on the new thread.
+
+The exact time at which it starts running is not guaranteed.
+
+### Calling `run()` directly
+
+```java
+Thread t1 = new Thread(() -> {
+    System.out.println("Executing task");
+});
+
+t1.run();
+```
+
+Calling `run()` directly is an ordinary method invocation. It does not start a new thread. The task executes on whichever thread called `run()`—the main thread in this example.
+
+### Mental model
+
+- `start()` → initiate a separate thread of execution.
+- `run()` → execute the method on the current thread.
+
+### Can a thread be started twice?
+
+No.
+
+```java
+Thread t1 = new Thread(() -> {
+    System.out.println("Hello");
+});
+
+t1.start();
+t1.start(); // IllegalThreadStateException
+```
+
+A `Thread` instance can be started only once, even if its first execution has already completed.
+
+If the same task needs to execute again, create a new `Thread` instance or submit the task again to an appropriate executor.
+
+## 8. What Is Thread Safety?
+
+A component is thread-safe when it behaves correctly under the concurrent access patterns it is designed to support.
+
+Suppose two threads execute:
+
+```java
+count++;
+```
+
+Even though this looks like one operation, incrementing a normal integer involves reading, calculating, and writing a value. Two threads can interfere with one another, causing lost updates.
+
+This is a race condition.
+
+Thread safety is not achieved merely by using multiple threads. It requires the program's shared-state and coordination rules to remain correct under concurrency.
+
+### Common techniques
+
+**1. Synchronization**
+
+Protect shared mutable state with appropriate locking.
+
+**2. Immutability**
+
+Immutable objects cannot have their state changed after construction, reducing the need for coordination around that state.
+
+**3. Concurrent collections**
+
+Use suitable implementations such as `ConcurrentHashMap` for concurrent access.
+
+**4. Atomic variables**
+
+Use classes such as `AtomicInteger` for supported atomic operations.
+
+**5. ThreadLocal**
+
+Use `ThreadLocal` when each thread needs its own independent value rather than a single shared value.
+
+`ThreadLocal` is not a general replacement for synchronization. With thread pools, values may remain associated with reused worker threads, so cleanup can be necessary.
+
+The correct technique depends on the data, operations, and concurrency requirements.
+
+## 9. What Happens When an Exception Occurs in a Thread?
+
+Consider two threads:
+- The main thread.
+- A child thread named `T1`.
+
+```java
+public class Main {
+    public static void main(String[] args) {
+        Thread t1 = new Thread(() -> {
+            throw new RuntimeException("Something failed");
+        });
+
+        t1.start();
+
+        System.out.println("Main thread is running");
+    }
+}
+```
+
+The child thread throws an unchecked exception that is not caught.
+
+What happens?
+
+1. `T1` terminates because of the uncaught exception.
+2. The JVM reports the exception through the thread's uncaught-exception handling mechanism, usually printing a stack trace.
+3. The exception does not automatically propagate into the main thread.
+4. The main thread can continue executing independently.
+
+The exact console output order is not guaranteed. The main thread's message may appear before or after the exception report.
+
+**Important correction:** An uncaught exception in a child thread does not automatically terminate the entire JVM. The JVM can continue while other threads remain active. However, if no non-daemon threads remain, the JVM may exit.
+
+### How can we handle the exception?
+
+For a task executed directly by a `Thread`, we can catch exceptions inside the task:
+
+```java
+Thread t1 = new Thread(() -> {
+    try {
+        throw new RuntimeException("Something failed");
+    } catch (RuntimeException e) {
+        System.err.println("Task failed: " + e.getMessage());
+    }
+});
+
+t1.start();
+```
+
+Alternatively, an `UncaughtExceptionHandler` can observe uncaught exceptions from threads. When using `ExecutorService`, task exceptions submitted through `submit()` are generally captured in the associated `Future` and should be inspected through it.
+
+## 10. Interview Revision
+
+1. Why can `Callable` declare checked exceptions while `Runnable` cannot?
+2. What is the difference between calling `start()` and calling `run()`?
+3. Can you restart a `Thread` instance after it finishes?
+4. What is thread safety, and why can `count++` be unsafe?
+5. What causes thread starvation, and how can it be reduced?
+6. What happens when an uncaught exception occurs in a child thread?
+7. Why should interruption be handled carefully?
+8. When would you choose an atomic variable instead of synchronization?
+9. Why might `ThreadLocal` require cleanup when used with thread pools?
+10. Why are high-level concurrency utilities usually preferable to implementing synchronization from scratch?
+
+## Final Mental Model
+
+- **Task abstraction:** `Runnable` and `Callable`.
+- **Execution:** `Thread` and `ExecutorService`.
+- **Result and failure retrieval:** `Future`.
+- **Coordination:** Locks, synchronization, latches, and blocking queues.
+- **Shared-state safety:** Immutability, atomics, and concurrent collections.
+- **Lifecycle and cancellation:** `start()`, interruption, and proper shutdown.
+- **Failure handling:** Catch exceptions when appropriate and observe failures from asynchronous tasks.
+
+The objective is not to memorize every concurrency class. It is to understand what problem each abstraction solves and then choose the simplest correct tool for the situation.
